@@ -87,17 +87,29 @@ export function environmentalLabel(choice = ENVIRONMENTAL_LABEL_CHOICE) {
 
 /** @type {Readonly<Record<string, object>>} */
 export const FIRST_RUN_MISSIONS = Object.freeze({
-  contacts: Object.freeze({
+  'border-airspace': Object.freeze({
     kind: 'context',
     contextMode: 'contacts',
-    busyText: 'Starting live contacts…',
+    layerIds: Object.freeze(['flights', 'military-flights']),
+    busyText: 'Starting live airspace monitoring…',
   }),
-  'space-missions': Object.freeze({
+  'maritime-chokepoints': Object.freeze({
+    kind: 'globe',
+    layerIds: Object.freeze(['ais-live-vessels']),
+    busyText: 'Loading maritime chokepoints…',
+  }),
+  'border-airspace': Object.freeze({
     kind: 'context',
-    contextMode: 'space-missions',
-    busyText: 'Opening space missions…',
+    contextMode: 'contacts',
+    layerIds: Object.freeze(['flights', 'military-flights']),
+    busyText: 'Starting live airspace monitoring…',
   }),
-  environmental: Object.freeze({
+  'maritime-chokepoints': Object.freeze({
+    kind: 'globe',
+    layerIds: Object.freeze(['ais-live-vessels']),
+    busyText: 'Loading maritime chokepoints…',
+  }),
+  'strategic-overwatch': Object.freeze({
     kind: 'globe',
     // Live USGS earthquakes AND NASA FIRMS active fires. The launcher optimizes
     // for the FULLY CONFIGURED experience (product decision, 2026-08-23): the tile
@@ -112,8 +124,8 @@ export const FIRST_RUN_MISSIONS = Object.freeze({
     // machine shared by every layer and not a thing to refactor the night
     // before a launch. LEDGERED post-launch. Until it lands, keyless visitors
     // are judged on the layer row, which tells them the truth.
-    layerIds: Object.freeze(['earthquakes', 'local-firms']),
-    busyText: 'Scanning active events…',
+    layerIds: Object.freeze(['military-flights', 'ais-live-vessels', 'local-firms']),
+    busyText: 'Loading strategic intelligence feeds…',
   }),
   explore: Object.freeze({ kind: 'none' }),
 });
@@ -257,7 +269,17 @@ export async function runFirstRunChoice(choice, { setContextMode, setLayerEnable
   if (mission.kind === 'none') return { ok: true, choice };
   if (mission.kind === 'context') {
     const result = await setContextMode(mission.contextMode);
-    return { ok: Boolean(result?.ok), choice, result };
+    const outcomes = await Promise.all((mission.layerIds || []).map(async (layerId) => {
+      try {
+        return { layerId, ok: (await setLayerEnabled(layerId)) !== false };
+      } catch {
+        return { layerId, ok: false };
+      }
+    }));
+    const baseFailedLayerIds = outcomes.filter((entry) => !entry.ok).map((entry) => entry.layerId);
+    const resultFailedLayerIds = result?.failedLayerIds || [];
+    const failedLayerIds = [...baseFailedLayerIds, ...resultFailedLayerIds];
+    return { ok: Boolean(result?.ok) && failedLayerIds.length === 0, choice, result, failedLayerIds };
   }
   // Globe missions: start the pull-out and the layer work together so the
   // camera is already moving while the feeds spin up. The flight is framing,

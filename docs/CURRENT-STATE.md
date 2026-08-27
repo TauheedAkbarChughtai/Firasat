@@ -1,4 +1,4 @@
-# God's Eye View Current State
+# Firasat Current State
 
 Updated: August 24, 2026
 
